@@ -5,8 +5,7 @@
   "scripts": {
     "start": "node imagenes.js",
     "dev": "nodemon imagenes.js",
-    "build": "echo \"No frontend aquí\"",
-    "postinstall": "npm install"
+    "build": "echo \"No frontend aquí\""
   },
   "author": "",
   "license": "ISC",
