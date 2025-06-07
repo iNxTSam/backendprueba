@@ -6,8 +6,6 @@ const imageRoutes = require('./routes/image.routes');
 const userRoutes = require('./routes/usuario.routes');
 const facturaRoutes = require('./routes/factura.routes'); 
 const app = express();
-app.use(express.json()); 
-app.use(express.urlencoded({ extended: true })); 
 const path = require("path");
 const devolucionRoutes = require('./routes/devolucion.routes');
 const RecuperarRoutes = require('./routes/recuperar.routes');
@@ -16,6 +14,7 @@ const SolicitudRoutes = require ('./routes/solicitud.routes')
 const carpetaCarrito = path.join(__dirname, '..', 'carrito');
 app.use('/carrito', express.static(carpetaCarrito));
 
+app.use(express.json()); 
 
 const cors = require("cors");
 
