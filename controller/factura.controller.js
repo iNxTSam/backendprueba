@@ -1,4 +1,4 @@
-const db = require('../conexion');
+const db = require('../conexion');Add commentMore actions
 
 exports.obtenerFacturas = (req, res) => {
   const query = 'SELECT * FROM factura';
@@ -9,55 +9,30 @@ exports.obtenerFacturas = (req, res) => {
     }
     res.json(results);
   });
-};
+}
 
 exports.obtenerFacturaPorNumero = (req, res) => {
   const { numeroFactura } = req.params;
 
-  const queryFactura = 'SELECT * FROM factura WHERE numeroFactura = ?';
-  const queryProductos = `
-    SELECT p.id, p.nombre_producto, p.tipo, fp.cantidad, fp.precio
-    FROM factura_productos fp
-    JOIN productos p ON fp.producto_id = p.id
-    WHERE fp.numeroFactura = ?
-  `;
-
-  db.query(queryFactura, [numeroFactura], (err, facturaResults) => {
+  const query = 'SELECT * FROM factura WHERE numeroFactura = ?';
+  db.query(query, [numeroFactura], (err, results) => {
     if (err) {
       console.error('Error al buscar la factura:', err);
       return res.status(500).json({ error: 'Error al buscar la factura' });
     }
-    if (facturaResults.length === 0) {
-      return res.status(404).json({ message: 'Factura no encontrada' });
+    if (results.length > 0) {
+      res.json(results[0]);
+    } else {
+      res.status(404).json({ message: 'Factura no encontrada' });
     }
-
-    db.query(queryProductos, [numeroFactura], (err, productosResults) => {
-      if (err) {
-        console.error('Error al obtener productos de la factura:', err);
-        return res.status(500).json({ error: 'Error al obtener productos de la factura' });
-      }
-
-      const factura = facturaResults[0];
-      // Aquí productosResults es la lista detallada, factura.productos es el JSON guardado
-      factura.productosDetalle = productosResults;
-      res.json(factura);
-    });
   });
 };
 
-const db = require('../conexion');
+exports.crearFactura =  (req, res) => {
+  const { nombre, correo, telefono, numeroFactura, productos, total, metodoPago } = req.body;
+  const producto = JSON.stringify(productos);
 
-exports.crearFactura = (req, res) => {
-  const { nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion } = req.body;
-
-  if (!correo || !correo.includes('@')) {
-    return res.status(400).json({ error: 'Correo inválido o ausente' });
-  }
-
-  if (!Array.isArray(productos) || productos.length === 0) {
-    return res.status(400).json({ error: 'La lista de productos no puede estar vacía' });
-  }
-
+  // Verificar si el correo existe en la tabla usuarios
   const checkUserQuery = 'SELECT * FROM usuarios WHERE correo = ?';
   db.query(checkUserQuery, [correo], (err, userResult) => {
     if (err) {
@@ -66,84 +41,44 @@ exports.crearFactura = (req, res) => {
     }
 
     if (userResult.length === 0) {
+      // El correo no existe en la tabla usuarios
       return res.status(400).json({ error: 'El correo no está registrado. No se puede generar la factura.' });
     }
 
-    const insertFacturaQuery = `
-      INSERT INTO factura(numeroFactura, nombre, correo, telefono, productos, total, metodoPago, token_devolucion)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    // Si el correo existe, insertamos la factura
+    const insertQuery = `
+      INSERT INTO factura(nombre, correo, telefono, numeroFactura, productos, total, metodoPago)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
-
-    db.query(insertFacturaQuery,
-      [numeroFactura, nombre, correo, telefono, JSON.stringify(productos), total, metodoPago, token_devolucion || null],
-      (err, facturaResult) => {
-        if (err) {
-          console.error('Error al guardar la factura:', err.sqlMessage || err);
-          return res.status(500).json({ error: 'Error al guardar la factura' });
-        }
-
-        res.status(201).json({ message: 'Factura guardada correctamente' });
-      });
+    db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago], (err, result) => {
+      if (err) {
+        console.error('Error al guardar la factura:', err.sqlMessage);
+        return res.status(500).json({ error: 'Error al guardar la factura' });
+      }
+      res.status(201).json({ message: 'Factura guardada', id: result.insertId });
+    });
   });
 };
 
-
 exports.actualizarFactura = (req, res) => {
   const { numeroFactura } = req.params;
-  const { nombre, correo, telefono, productos, total, metodoPago, token_devolucion } = req.body;
+  const { nombre, correo, telefono, productos, total, metodoPago } = req.body;
+  const producto = JSON.stringify(productos);
 
-  const updateFacturaQuery = `
-    UPDATE factura
-    SET nombre = ?, correo = ?, telefono = ?, productos = ?, total = ?, metodoPago = ?, token_devolucion = ?
-    WHERE numeroFactura = ?
-  `;
-
-  db.query(updateFacturaQuery,
-    [nombre, correo, telefono, JSON.stringify(productos), total, metodoPago, token_devolucion || null, numeroFactura],
+  db.query(
+    'UPDATE factura SET nombre = ?, correo = ?, telefono = ?, numeroFactura = ?, productos = ?, total = ?, metodoPago = ? WHERE numeroFactura = ?',
+    [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, numeroFactura],
     (err, result) => {
       if (err) {
         console.error('Error al modificar la factura:', err);
         return res.status(500).json({ error: 'Error al modificar la factura' });
       }
-
       if (result.affectedRows === 0) {
         return res.status(404).json({ message: 'Factura no encontrada' });
       }
-
-      const deleteProductosQuery = 'DELETE FROM factura_productos WHERE numeroFactura = ?';
-
-      db.query(deleteProductosQuery, [numeroFactura], (err) => {
-        if (err) {
-          console.error('Error al eliminar productos antiguos:', err);
-          return res.status(500).json({ error: 'Error al actualizar los productos' });
-        }
-
-        if (!Array.isArray(productos) || productos.length === 0) {
-          return res.json({ message: 'Factura actualizada correctamente, sin productos' });
-        }
-
-        const insertProductosQuery = `
-          INSERT INTO factura_productos (numeroFactura, producto_id, cantidad, precio)
-          VALUES ?
-        `;
-
-        const productosValues = productos.map(p => [
-          numeroFactura,
-          p.id,
-          p.cantidad,
-          p.precio
-        ]);
-
-        db.query(insertProductosQuery, [productosValues], (err) => {
-          if (err) {
-            console.error('Error al insertar productos actualizados:', err);
-            return res.status(500).json({ error: 'Error al actualizar los productos' });
-          }
-
-          res.json({ message: 'Factura y productos actualizados correctamente' });
-        });
-      });
-    });
+      res.json({ message: 'Factura actualizada correctamente' });
+    }
+  );
 };
 
 exports.eliminarFactura = (req, res) => {
