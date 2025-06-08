@@ -45,6 +45,8 @@ exports.obtenerFacturaPorNumero = (req, res) => {
   });
 };
 
+const db = require('../conexion');
+
 exports.crearFactura = (req, res) => {
   const { nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion } = req.body;
 
@@ -76,33 +78,15 @@ exports.crearFactura = (req, res) => {
       [numeroFactura, nombre, correo, telefono, JSON.stringify(productos), total, metodoPago, token_devolucion || null],
       (err, facturaResult) => {
         if (err) {
-          console.error('Error al guardar la factura:', err.sqlMessage);
+          console.error('Error al guardar la factura:', err.sqlMessage || err);
           return res.status(500).json({ error: 'Error al guardar la factura' });
         }
 
-        const insertProductosQuery = `
-          INSERT INTO factura_productos (numeroFactura, producto_id, cantidad, precio)
-          VALUES ?
-        `;
-
-        const productosValues = productos.map(p => [
-          numeroFactura,
-          p.id,
-          p.cantidad,
-          p.precio
-        ]);
-
-        db.query(insertProductosQuery, [productosValues], (err) => {
-          if (err) {
-            console.error('Error al guardar los productos de la factura:', err.sqlMessage);
-            return res.status(500).json({ error: 'Error al guardar los productos de la factura' });
-          }
-
-          res.status(201).json({ message: 'Factura y productos guardados correctamente' });
-        });
+        res.status(201).json({ message: 'Factura guardada correctamente' });
       });
   });
 };
+
 
 exports.actualizarFactura = (req, res) => {
   const { numeroFactura } = req.params;
