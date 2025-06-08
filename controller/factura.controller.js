@@ -32,6 +32,10 @@ exports.crearFactura = (req, res) => {
   const { nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion } = req.body;
   const producto = JSON.stringify(productos);
 
+  if (!correo) {
+    return res.status(400).json({ error: 'El correo es obligatorio' });
+  }
+
   const checkUserQuery = 'SELECT * FROM usuarios WHERE correo = ?';
   db.query(checkUserQuery, [correo], (err, userResult) => {
     if (err) {
@@ -48,7 +52,8 @@ exports.crearFactura = (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, token_devolucion], (err, result) => {
+    // En caso de que token_devolucion sea undefined, se puede enviar null
+    db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, token_devolucion || null], (err, result) => {
       if (err) {
         console.error('Error al guardar la factura:', err.sqlMessage);
         return res.status(500).json({ error: 'Error al guardar la factura' });
@@ -57,6 +62,7 @@ exports.crearFactura = (req, res) => {
     });
   });
 };
+
 
 exports.actualizarFactura = (req, res) => {
   const { numeroFactura } = req.params;
