@@ -28,11 +28,10 @@ exports.obtenerFacturaPorNumero = (req, res) => {
   });
 };
 
-exports.crearFactura =  (req, res) => {
-  const { nombre, correo, telefono, numeroFactura, productos, total, metodoPago } = req.body;
+exports.crearFactura = (req, res) => {
+  const { nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion } = req.body;
   const producto = JSON.stringify(productos);
 
-  // Verificar si el correo existe en la tabla usuarios
   const checkUserQuery = 'SELECT * FROM usuarios WHERE correo = ?';
   db.query(checkUserQuery, [correo], (err, userResult) => {
     if (err) {
@@ -41,16 +40,15 @@ exports.crearFactura =  (req, res) => {
     }
 
     if (userResult.length === 0) {
-      // El correo no existe en la tabla usuarios
       return res.status(400).json({ error: 'El correo no está registrado. No se puede generar la factura.' });
     }
 
-    // Si el correo existe, insertamos la factura
     const insertQuery = `
-      INSERT INTO factura(nombre, correo, telefono, numeroFactura, productos, total, metodoPago)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO factura(nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago], (err, result) => {
+
+    db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, token_devolucion], (err, result) => {
       if (err) {
         console.error('Error al guardar la factura:', err.sqlMessage);
         return res.status(500).json({ error: 'Error al guardar la factura' });
@@ -62,12 +60,12 @@ exports.crearFactura =  (req, res) => {
 
 exports.actualizarFactura = (req, res) => {
   const { numeroFactura } = req.params;
-  const { nombre, correo, telefono, productos, total, metodoPago } = req.body;
+  const { nombre, correo, telefono, productos, total, metodoPago, token_devolucion} = req.body;
   const producto = JSON.stringify(productos);
 
   db.query(
-    'UPDATE factura SET nombre = ?, correo = ?, telefono = ?, numeroFactura = ?, productos = ?, total = ?, metodoPago = ? WHERE numeroFactura = ?',
-    [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, numeroFactura],
+    'UPDATE factura SET nombre = ?, correo = ?, telefono = ?, numeroFactura = ?, productos = ?, total = ?, metodoPago = ?, token_devolucion = WHERE numeroFactura = ?',
+    [nombre, correo, telefono, , productos, total, metodoPago, token_devolucion,],
     (err, result) => {
       if (err) {
         console.error('Error al modificar la factura:', err);
