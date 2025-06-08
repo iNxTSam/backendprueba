@@ -30,36 +30,61 @@ exports.obtenerFacturaPorNumero = (req, res) => {
 
 exports.crearFactura = (req, res) => {
   const { nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion } = req.body;
-  const producto = JSON.stringify(productos);
 
-  if (!correo) {
-    return res.status(400).json({ error: 'El correo es obligatorio' });
+  // Validaciones básicas
+  if (!correo || !correo.includes('@')) {
+    return res.status(400).json({ error: 'Correo inválido o ausente' });
   }
 
-  const checkUserQuery = 'SELECT * FROM usuarios WHERE correo = ?';
-  db.query(checkUserQuery, [correo], (err, userResult) => {
+  if (!Array.isArray(productos) || productos.length === 0) {
+    return res.status(400).json({ error: 'La lista de productos no puede estar vacía' });
+  }
+
+  let productoJSON;
+  try {
+    productoJSON = JSON.stringify(productos);
+  } catch (error) {
+    console.error('Error al convertir productos a JSON:', error);
+    return res.status(500).json({ error: 'Error al procesar los productos' });
+  }
+
+  req.getConnection((err, connection) => {
     if (err) {
-      console.error('Error al verificar el correo del usuario:', err);
-      return res.status(500).json({ error: 'Error en la validación del correo' });
+      console.error('Error de conexión a la base de datos:', err);
+      return res.status(500).json({ error: 'Error de conexión a la base de datos' });
     }
 
-    if (userResult.length === 0) {
-      return res.status(400).json({ error: 'El correo no está registrado. No se puede generar la factura.' });
-    }
+    // Validar que el correo exista en la tabla usuarios
+    const checkUserQuery = 'SELECT * FROM usuarios WHERE correo = ?';
+    connection.query(checkUserQuery, [correo], (err, userResult) => {
+      if (err) {
+        console.error('Error al verificar el correo del usuario:', err);
+        return res.status(500).json({ error: 'Error en la validación del correo' });
+      }
 
+      if (userResult.length === 0) {
+        return res.status(400).json({ error: 'El correo no está registrado. No se puede generar la factura.' });
+      }
+
+      // Insertar la factura si el usuario existe
       const insertQuery = `
         INSERT INTO factura(nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      
-      db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, token_devolucion || null], (err, result) => {
-        if (err) {
-          console.error('Error al guardar la factura:', err.sqlMessage);
-          return res.status(500).json({ error: 'Error al guardar la factura' });
-        }
-        res.status(201).json({ message: 'Factura guardada', id: result.insertId });
-      });
 
+      connection.query(
+        insertQuery,
+        [nombre, correo, telefono, numeroFactura, productoJSON, total, metodoPago, token_devolucion || null],
+        (err, result) => {
+          if (err) {
+            console.error('Error al guardar la factura:', err.sqlMessage);
+            return res.status(500).json({ error: 'Error al guardar la factura' });
+          }
+
+          res.status(201).json({ message: 'Factura guardada correctamente', id: result.insertId });
+        }
+      );
+    });
   });
 };
 
