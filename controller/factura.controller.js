@@ -47,19 +47,19 @@ exports.crearFactura = (req, res) => {
       return res.status(400).json({ error: 'El correo no está registrado. No se puede generar la factura.' });
     }
 
-    const insertQuery = `
-      INSERT INTO factura(nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+      const insertQuery = `
+        INSERT INTO factura(nombre, correo, telefono, numeroFactura, productos, total, metodoPago, token_devolucion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, token_devolucion || null], (err, result) => {
+        if (err) {
+          console.error('Error al guardar la factura:', err.sqlMessage);
+          return res.status(500).json({ error: 'Error al guardar la factura' });
+        }
+        res.status(201).json({ message: 'Factura guardada', id: result.insertId });
+      });
 
-    // En caso de que token_devolucion sea undefined, se puede enviar null
-    db.query(insertQuery, [nombre, correo, telefono, numeroFactura, producto, total, metodoPago, token_devolucion || null], (err, result) => {
-      if (err) {
-        console.error('Error al guardar la factura:', err.sqlMessage);
-        return res.status(500).json({ error: 'Error al guardar la factura' });
-      }
-      res.status(201).json({ message: 'Factura guardada', id: result.insertId });
-    });
   });
 };
 
