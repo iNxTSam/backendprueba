@@ -38,7 +38,8 @@ exports.obtenerFacturaPorNumero = (req, res) => {
       }
 
       const factura = facturaResults[0];
-      factura.productos = productosResults;
+      // Aquí productosResults es la lista detallada, factura.productos es el JSON guardado
+      factura.productosDetalle = productosResults;
       res.json(factura);
     });
   });
@@ -67,12 +68,12 @@ exports.crearFactura = (req, res) => {
     }
 
     const insertFacturaQuery = `
-      INSERT INTO factura(numeroFactura, nombre, correo, telefono, total, metodoPago, token_devolucion)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO factura(numeroFactura, nombre, correo, telefono, productos, total, metodoPago, token_devolucion)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.query(insertFacturaQuery,
-      [numeroFactura, nombre, correo, telefono, total, metodoPago, token_devolucion || null],
+      [numeroFactura, nombre, correo, telefono, JSON.stringify(productos), total, metodoPago, token_devolucion || null],
       (err, facturaResult) => {
         if (err) {
           console.error('Error al guardar la factura:', err.sqlMessage);
@@ -109,54 +110,56 @@ exports.actualizarFactura = (req, res) => {
 
   const updateFacturaQuery = `
     UPDATE factura
-    SET nombre = ?, correo = ?, telefono = ?, total = ?, metodoPago = ?, token_devolucion = ?
+    SET nombre = ?, correo = ?, telefono = ?, productos = ?, total = ?, metodoPago = ?, token_devolucion = ?
     WHERE numeroFactura = ?
   `;
 
-  db.query(updateFacturaQuery, [nombre, correo, telefono, total, metodoPago, token_devolucion || null, numeroFactura], (err, result) => {
-    if (err) {
-      console.error('Error al modificar la factura:', err);
-      return res.status(500).json({ error: 'Error al modificar la factura' });
-    }
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Factura no encontrada' });
-    }
-
-    const deleteProductosQuery = 'DELETE FROM factura_productos WHERE numeroFactura = ?';
-
-    db.query(deleteProductosQuery, [numeroFactura], (err) => {
+  db.query(updateFacturaQuery,
+    [nombre, correo, telefono, JSON.stringify(productos), total, metodoPago, token_devolucion || null, numeroFactura],
+    (err, result) => {
       if (err) {
-        console.error('Error al eliminar productos antiguos:', err);
-        return res.status(500).json({ error: 'Error al actualizar los productos' });
+        console.error('Error al modificar la factura:', err);
+        return res.status(500).json({ error: 'Error al modificar la factura' });
       }
 
-      if (!Array.isArray(productos) || productos.length === 0) {
-        return res.json({ message: 'Factura actualizada correctamente, sin productos' });
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Factura no encontrada' });
       }
 
-      const insertProductosQuery = `
-        INSERT INTO factura_productos (numeroFactura, producto_id, cantidad, precio)
-        VALUES ?
-      `;
+      const deleteProductosQuery = 'DELETE FROM factura_productos WHERE numeroFactura = ?';
 
-      const productosValues = productos.map(p => [
-        numeroFactura,
-        p.id,
-        p.cantidad,
-        p.precio
-      ]);
-
-      db.query(insertProductosQuery, [productosValues], (err) => {
+      db.query(deleteProductosQuery, [numeroFactura], (err) => {
         if (err) {
-          console.error('Error al insertar productos actualizados:', err);
+          console.error('Error al eliminar productos antiguos:', err);
           return res.status(500).json({ error: 'Error al actualizar los productos' });
         }
 
-        res.json({ message: 'Factura y productos actualizados correctamente' });
+        if (!Array.isArray(productos) || productos.length === 0) {
+          return res.json({ message: 'Factura actualizada correctamente, sin productos' });
+        }
+
+        const insertProductosQuery = `
+          INSERT INTO factura_productos (numeroFactura, producto_id, cantidad, precio)
+          VALUES ?
+        `;
+
+        const productosValues = productos.map(p => [
+          numeroFactura,
+          p.id,
+          p.cantidad,
+          p.precio
+        ]);
+
+        db.query(insertProductosQuery, [productosValues], (err) => {
+          if (err) {
+            console.error('Error al insertar productos actualizados:', err);
+            return res.status(500).json({ error: 'Error al actualizar los productos' });
+          }
+
+          res.json({ message: 'Factura y productos actualizados correctamente' });
+        });
       });
     });
-  });
 };
 
 exports.eliminarFactura = (req, res) => {
