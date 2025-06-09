@@ -3,8 +3,7 @@ const db = require('../conexion');
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
-
-
+const solicitudes = []; // Lista en memoria, puedes migrar a base de datos en el futuro
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -20,7 +19,7 @@ transporter.verify((error, success) => {
   else console.log('Nodemailer funcionando correctamente.');
 });
 
-
+// Enviar una solicitud de devolución
 exports.enviarSolicitud = async (req, res) => {
   const {
     correoUsuario, nombreUsuario, numeroFactura, enlaceDevolucion,
@@ -28,23 +27,21 @@ exports.enviarSolicitud = async (req, res) => {
     metodoPagoUsuario, totalUsuario, fechaUsuario
   } = req.body;
 
-
   if (!correoUsuario || !nombreUsuario || !numeroFactura || !telefonoUsuario ||
-      !productoUsuario || !comentarioUsuario || !metodoPagoUsuario ||
-      !totalUsuario || !fechaUsuario || !enlaceDevolucion) {
+    !productoUsuario || !comentarioUsuario || !metodoPagoUsuario ||
+    !totalUsuario || !fechaUsuario || !enlaceDevolucion) {
     return res.status(400).json({ message: 'Faltan datos para procesar la solicitud.' });
   }
-
 
   const nuevaSolicitud = {
     _id: crypto.randomUUID(),
     usuario: nombreUsuario,
     correo: correoUsuario,
     telefono: telefonoUsuario,
-    producto: productoUsuario || [],
-    comentario: comentarioUsuario || '',
-    metodoPago: metodoPagoUsuario || '',
-    total: totalUsuario || 0,
+    producto: productoUsuario,
+    comentario: comentarioUsuario,
+    metodoPago: metodoPagoUsuario,
+    total: totalUsuario,
     numeroFactura,
     enlaceDevolucion,
     fecha: new Date().toISOString()
@@ -59,37 +56,23 @@ exports.enviarSolicitud = async (req, res) => {
   }
 };
 
-
+// Obtener todas las solicitudes
 exports.obtenerSolicitudes = (req, res) => {
-  const resumen = solicitudes.map(({ _id, usuario, correo, numeroFactura, producto, telefono, metodoPago, total, comentario, fecha }) => ({
-    _id, usuario, correo, numeroFactura, producto, telefono, metodoPago, total, comentario, fecha
-  }));
-  res.status(200).json(resumen);
+  res.status(200).json(solicitudes);
 };
 
-
+// Obtener detalles de una solicitud específica
 exports.obtenerDetalleSolicitud = (req, res) => {
   const { id } = req.params;
   const solicitud = solicitudes.find(s => s._id === id);
   if (solicitud) {
-    res.status(200).json({
-      _id: solicitud._id,
-      usuario: solicitud.usuario,
-      correo: solicitud.correo,
-      numeroFactura: solicitud.numeroFactura,
-      telefono: solicitud.telefono,
-      producto: solicitud.producto,
-      comentario: solicitud.comentario,
-      metodoPago: solicitud.metodoPago,
-      total: solicitud.total,
-      fecha: solicitud.fecha
-    });
+    res.status(200).json(solicitud);
   } else {
     res.status(404).json({ message: 'Solicitud no encontrada.' });
   }
 };
 
-
+// Aceptar una solicitud
 exports.aceptarSolicitud = async (req, res) => {
   const { id } = req.params;
   const index = solicitudes.findIndex(s => s._id === id);
@@ -98,7 +81,6 @@ exports.aceptarSolicitud = async (req, res) => {
   const solicitud = solicitudes[index];
   const token = crypto.randomBytes(16).toString('hex');
 
- 
   const updateTokenQuery = 'UPDATE factura SET token_devolucion = ? WHERE numeroFactura = ?';
   db.query(updateTokenQuery, [token, solicitud.numeroFactura], (err) => {
     if (err) {
@@ -106,7 +88,6 @@ exports.aceptarSolicitud = async (req, res) => {
       return res.status(500).json({ message: 'Error al asignar el token de devolución.' });
     }
 
-  
     const queryDevolucion = `
       INSERT INTO devolucion (numeroFactura, nombre, telefono, productos, total, metodoPago, comentarios, correo)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -126,37 +107,30 @@ exports.aceptarSolicitud = async (req, res) => {
       async (err) => {
         if (err) {
           console.error('Error al registrar la devolución:', err);
-          return res.status(500).json({ message: 'Error al registrar la devolución en la base de datos.' });
+          return res.status(500).json({ message: 'Error al registrar la devolución.' });
         }
 
-  
         const mailOptions = {
-          from: 'jhoanUniforms@gmail.com',
+          from: process.env.EMAIL_USER,
           to: solicitud.correo,
           subject: `Solicitud de Devolución Aceptada - Factura ${solicitud.numeroFactura}`,
           text: `
 Hola ${solicitud.usuario},
 
-Gracias por ponerte en contacto con nosotros. Hemos revisado detenidamente tu solicitud de devolución correspondiente al comprobante N° ${solicitud.numeroFactura}.
+Gracias por contactarte. Hemos aprobado tu solicitud de devolución para la factura N° ${solicitud.numeroFactura}.
 
-Tuvimos en cuenta el comentario que compartiste: "${solicitud.comentario}" y, tras evaluar el caso, confirmamos que tu solicitud cumple con los criterios establecidos en nuestra política de garantías y devoluciones.
+Comentario: "${solicitud.comentario}"
 
-Por ello, hemos aprobado tu solicitud de devolución. Para continuar con el proceso, te invitamos a acercarte a nuestras instalaciones con el producto y el comprobante correspondiente. Nuestro equipo estará disponible para asistirte personalmente.
+Puedes acercarte a nuestras instalaciones con el producto y el comprobante correspondiente.
 
-Si tienes alguna pregunta adicional o necesitas más información, no dudes en comunicarte con nosotros.
-
-Saludos cordiales,  
+Saludos,  
 El equipo de Jhoan Uniforms.
           `
         };
 
         try {
-   
           await transporter.sendMail(mailOptions);
-          
-
-          solicitudes.splice(index, 1);
-
+          solicitudes.splice(index, 1); // eliminar la solicitud ya atendida
           res.status(200).json({ message: 'Solicitud aceptada, correo enviado y devolución registrada con éxito.' });
         } catch (error) {
           console.error('Error al enviar correo:', error);
@@ -167,38 +141,33 @@ El equipo de Jhoan Uniforms.
   });
 };
 
+// Rechazar una solicitud
 exports.rechazarSolicitud = async (req, res) => {
   const { id } = req.params;
   const index = solicitudes.findIndex(s => s._id === id);
   if (index === -1) return res.status(404).json({ message: 'Solicitud no encontrada.' });
 
   const solicitud = solicitudes[index];
-  
 
   const mailOptions = {
-    from: 'jhoanUniforms@gmail.com',
+    from: process.env.EMAIL_USER,
     to: solicitud.correo,
     subject: `Solicitud de Devolución Rechazada - Factura ${solicitud.numeroFactura}`,
     text: `
 Hola ${solicitud.usuario},
 
-Lamentamos informarte que tu solicitud de devolución para la factura ${solicitud.numeroFactura} ha sido RECHAZADA.
+Lamentamos informarte que tu solicitud de devolución para la factura ${solicitud.numeroFactura} ha sido rechazada.
 
-No cumple con los criterios establecidos en nuestra política de devoluciones.
+Motivo: no cumple con los criterios establecidos en nuestra política de devoluciones.
 
-Si deseas más información, contáctanos.
-
-Saludos,
+Saludos,  
 El equipo de Jhoan Uniforms.
     `
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    
-  
     solicitudes.splice(index, 1);
-
     res.status(200).json({ message: 'Solicitud rechazada y correo enviado.' });
   } catch (error) {
     console.error('Error al enviar correo:', error);
@@ -206,6 +175,7 @@ El equipo de Jhoan Uniforms.
   }
 };
 
+// Obtener todas las devoluciones aprobadas (desde la BD)
 exports.obtenerDevoluciones = (req, res) => {
   const query = "SELECT * FROM devolucion";
   db.query(query, (err, results) => {
@@ -216,4 +186,3 @@ exports.obtenerDevoluciones = (req, res) => {
     res.json(results);
   });
 };
-
