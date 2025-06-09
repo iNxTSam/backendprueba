@@ -22,7 +22,8 @@ app.use(express.json());
 // ✅ Middleware CORS personalizado para evitar problemas con Azure
 app.use((req, res, next) => {
   const allowedOrigins = [
-    'http://localhost:3000'
+    'https://blue-pebble-0e86f730f.6.azurestaticapps.net',
+    'http://localhost:3002'
   ];
   const origin = req.headers.origin;
 
