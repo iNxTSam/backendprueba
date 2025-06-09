@@ -23,7 +23,7 @@ app.use(express.json());
 app.use((req, res, next) => {
   const allowedOrigins = [
     'https://blue-pebble-0e86f730f.6.azurestaticapps.net',
-    'http://localhost:3002'
+    'http://localhost:3000'
   ];
   const origin = req.headers.origin;
 
